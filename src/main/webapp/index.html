@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>JFT-E2 · EMP 员工管理 MIS</title>
+    <style>
+        :root { color-scheme: light dark; }
+        body { margin: 0; padding: 40px 24px; font: 15px/1.6 "Segoe UI", "Microsoft YaHei", sans-serif;
+               max-width: 880px; margin-inline: auto; }
+        h1 { font-size: 22px; margin: 0 0 4px; }
+        p.sub { color: #888; margin: 0 0 28px; font-size: 14px; }
+        h2 { font-size: 15px; margin: 28px 0 10px; color: #666; font-weight: 600;
+             text-transform: uppercase; letter-spacing: .06em; }
+        table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid rgba(128,128,128,.25); }
+        th { font-weight: 600; color: #777; }
+        code { font-family: Consolas, "Cascadia Mono", monospace; font-size: 13px; }
+        .m { display: inline-block; min-width: 58px; font-weight: 600; font-family: Consolas, monospace; }
+        .get { color: #2f7d32; } .post { color: #1565c0; }
+        .put { color: #b26a00; } .del { color: #b3261e; }
+        .note { background: rgba(128,128,128,.10); border-left: 3px solid rgba(128,128,128,.35);
+                padding: 10px 14px; font-size: 13px; margin-top: 22px; }
+    </style>
+</head>
+<body>
+<h1>JFT-E2 · EMP 员工管理 MIS</h1>
+<p class="sub">SSM（Spring 5.3 + Spring MVC + MyBatis-Plus 3.5）全注解整合 · 实验二</p>
+
+<h2>先登录</h2>
+<table>
+    <tr><th style="width:90px">方法</th><th>路径</th><th>说明</th></tr>
+    <tr><td><span class="m post">POST</span></td><td><code>/login</code></td>
+        <td>请求体 <code>{"username":"admin","password":"123456"}</code>，成功后 Cookie 保存会话</td></tr>
+    <tr><td><span class="m get">GET</span></td><td><code>/logout</code></td><td>销毁会话，之后业务接口重新返回 401</td></tr>
+</table>
+
+<h2>员工接口（需要登录）</h2>
+<table>
+    <tr><th style="width:90px">方法</th><th>路径</th><th>说明</th></tr>
+    <tr><td><span class="m get">GET</span></td><td><code>/emps</code></td>
+        <td>分页 + 多条件：<code>?name=罗&amp;gender=男&amp;dept=技术部&amp;page=1&amp;size=5</code></td></tr>
+    <tr><td><span class="m get">GET</span></td><td><code>/emps/{id}</code></td><td>按主键查询</td></tr>
+    <tr><td><span class="m get">GET</span></td><td><code>/emps/list</code></td><td>全量列表（不分页）</td></tr>
+    <tr><td><span class="m post">POST</span></td><td><code>/emps</code></td><td>新增，请求体为 Emp JSON</td></tr>
+    <tr><td><span class="m put">PUT</span></td><td><code>/emps</code></td><td>修改，请求体必须含 empId</td></tr>
+    <tr><td><span class="m del">DELETE</span></td><td><code>/emps/{id}</code></td><td>单条删除</td></tr>
+    <tr><td><span class="m del">DELETE</span></td><td><code>/emps</code></td><td>批量删除，请求体为 id 数组，如 <code>[1,2]</code></td></tr>
+</table>
+
+<div class="note">
+    统一返回 <code>{"code":200,"message":"success","data":…}</code>；未登录 401、参数/业务失败 400、服务端异常 500。<br>
+    校验规则：姓名非空且 ≤50 字、薪资必填且 ≥0、性别 1 个字符、部门/岗位 ≤50 字。
+</div>
+</body>
+</html>

@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--❗️事先说明，本实验采用logback而非log4j（这玩意已经eol了，谁爱用谁用去）❗️-->
+<!-- 注：上面这条批注原来写在 XML 声明之前，Joran 解析时直接报 "Parsing fatal error"（声明必须是最外层第一个东西），
+     整份配置作废、SQL 日志既不落盘也不上控制台 —— 原话一字未改，只是挪到声明之后 -->
+<!-- ========== Logback 配置：SLF4J 门面 + Logback 实现 ========== -->
+<!-- 以老师课程 code/logback.xml 为底，修正两点：
+     1. 课件里 org.mybatis 这个 logger 名是无效的（MyBatis 按 namespace 即 Mapper 接口包打日志），
+        真正的 SQL 日志开关是 com.offblink；
+     2. 启用滚动文件输出，SQL 日志落盘 logs/mybatis.log，供实验报告截图与排错回溯 -->
+<configuration>
+
+    <!-- 控制台输出：跑测试时直接看 Preparing / Parameters / Total -->
+    <appender name="stdout" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+<!--            就是介绍一些输出的格式之类的-->
+            <pattern>%d{yyyy-MM-dd HH:mm:ss} %-5level %logger{36} - %msg%n</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!-- 两手准备：文件输出（滚动保留 3 份，单份 5MB），也是实验报告的 SQL 日志素材 -->
+    <appender name="file" class="ch.qos.logback.core.rolling.RollingFileAppender">
+
+<!--        输出到这个文件-->
+        <file>logs/mybatis.log</file>
+
+        <rollingPolicy class="ch.qos.logback.core.rolling.FixedWindowRollingPolicy">
+            <fileNamePattern>logs/mybatis.%i.log</fileNamePattern>
+            <minIndex>1</minIndex>
+<!--            滚动条最多显示最近三份-->
+            <maxIndex>3</maxIndex>
+        </rollingPolicy>
+
+<!--        每份5MB封顶-->
+        <triggeringPolicy class="ch.qos.logback.core.rolling.SizeBasedTriggeringPolicy">
+            <maxFileSize>5MB</maxFileSize>
+        </triggeringPolicy>
+
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss} [%level] %logger - %msg%n</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!-- 项目包 DEBUG：MyBatis 按 namespace（Mapper 接口全限定名）打日志，
+         这里一次管住所有 Mapper，输出 Preparing / Parameters / Columns / Total 行 -->
+    <logger name="com.offblink" level="DEBUG"/>
+
+    <!-- Spring 整合块（spring 包）的日志开关：SqlSession 创建/归还与事务提交/回滚全过程落盘，
+         SpringDaoTest 回滚用例的证据行「Rolling back JDBC transaction」就在这里 -->
+    <logger name="org.mybatis.spring" level="DEBUG"/>
+    <logger name="org.springframework.jdbc" level="DEBUG"/>
+
+    <!-- 根日志器：控制台 + 文件双输出 -->
+    <root level="INFO">
+<!--        两个输出位置-->
+        <appender-ref ref="stdout"/>
+        <appender-ref ref="file"/>
+    </root>
+
+</configuration>

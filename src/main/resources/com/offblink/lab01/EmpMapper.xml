@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<!-- 与接口 com.offblink.lab01.EmpMapper 同包同名（resources/com/offblink/lab01/）：
+     mybatis-config.xml 的 <package> 扫包、cfg.addMapper() 都能自动发现本文件 -->
+<!-- 表名一律 schema 限定为 ssm_emp.employer：连接串（db.properties）也指向 ssm_emp，
+     这里再显式限定一次库名，语句自带落点（换数据源、临时连别的库时不会静默查到错表） -->
+<mapper namespace="com.offblink.lab01.EmpMapper">
+
+    <!--
+        ═══════════════════════════════════════════════════
+        第一部分：ResultMap 结果映射（指导书任务 2.3）
+        ═══════════════════════════════════════════════════
+        resultType 要求查询字段名与属性名完全一致，对不上的列会静默变 null；
+        ResultMap 则把映射关系显式声明出来（emp_id/emp_name/hire_date 三个对不上）。
+        注意：resultMap 与 resultType 互斥，不能同时用。
+    -->
+    <resultMap id="empMap" type="Emp">
+        <id property="empId" column="emp_id"/>
+        <result property="empName" column="emp_name"/>
+        <result property="gender" column="gender"/>
+        <result property="dept" column="dept"/>
+        <result property="post" column="post"/>
+        <result property="salary" column="salary"/>
+        <result property="hireDate" column="hire_date"/>
+        <result property="status" column="status"/>
+    </resultMap>
+
+    <!-- 全字段 SQL 片段：一处维护，<include> 复用 -->
+    <sql id="allColumns">
+        emp_id, emp_name, gender, dept, post, salary, hire_date, status
+    </sql>
+
+    <!--
+        ═══════════════════════════════════════════════════
+        基础 CRUD 已改注解实现（对应课件第 3 节注解开发）：
+          @Select / @Insert / @Update / @Delete 写静态 SQL，
+          @Options(useGeneratedKeys, keyProperty) 负责自增主键回填，
+          @ResultMap 复用上面的 empMap —— 注解写 SQL、映射复用 XML，
+          就是课件 4-2 说的"跨方式引用"。
+        XML 这里保留 resultMap 与动态 SQL：任务 3 的动态标签是 XML 的主场。
+        ═══════════════════════════════════════════════════
+    -->
+
+    <!--
+        ═══════════════════════════════════════════════════
+        第二部分：动态 SQL（指导书任务 3）
+        ═══════════════════════════════════════════════════
+        动态的编译：MyBatis 先按参数值把 SQL 文本拼出来，再预编译发送。
+        条件主要根据参数值判断（test 表达式），占位符一律用 #{}（预编译防注入）。
+    -->
+
+    <!--
+        1. <if> + <where>  多条件任意组合查询
+           <where> 的作用：
+             · 所有条件都为空 → 自动去掉 WHERE 关键字（退化为全表查询，不会语法错误）
+             · 第一个条件带 AND → 自动去掉开头多余的 AND
+           场景：姓名/性别/部门/状态有哪个查哪个
+    -->
+<!--    有人说，我怎么记得还有个1=1呢？那个是应用在choice+otherwise语句中的，因为没有这个语句无法执行-->
+    <select id="selectByCondition" parameterType="Emp" resultMap="empMap">
+        SELECT <include refid="allColumns"/> FROM ssm_emp.employer
+        <where>
+            <if test="empName != null and empName != ''">
+                <!-- 看到了吗？预编译#用concat拼接字符串（原批注为 SQL 文本里的裸双横线注释，会被当 SQL 发给 MySQL 导致语法错，故挪成 XML 注释） -->
+                AND emp_name LIKE CONCAT('%', #{empName}, '%')
+            </if>
+            <if test="gender != null and gender != ''">
+                AND gender = #{gender}
+            </if>
+            <if test="dept != null and dept != ''">
+                AND dept = #{dept}
+            </if>
+            <if test="status != null">
+                AND status = #{status}
+            </if>
+        </where>
+    </select>
+
+<!--    这个是老师说很“鸡肋” 的，但是为了实验还是勉强写了一些-->
+    <!--
+        2. <trim>  与第 1 条等效的条件查询（自定义裁剪）
+           属性说明：
+             prefix="WHERE"                 存在内容时才补前缀
+             prefixOverrides="AND |OR "     去掉开头多余的 AND/OR（注意末尾有空格）
+           结论：<where> 就是 prefix=WHERE、prefixOverrides=AND|OR 的 <trim> 特例；
+                 <set> 同理是 suffixOverrides 逗号的特例
+    -->
+    <select id="selectByTrim" parameterType="Emp" resultMap="empMap">
+        SELECT <include refid="allColumns"/> FROM ssm_emp.employer
+        <trim prefix="WHERE" prefixOverrides="AND |OR ">
+            <if test="empName != null and empName != ''">
+                AND emp_name LIKE CONCAT('%', #{empName}, '%')
+            </if>
+            <if test="gender != null and gender != ''">
+                AND gender = #{gender}
+            </if>
+            <if test="dept != null and dept != ''">
+                AND dept = #{dept}
+            </if>
+            <if test="status != null">
+                AND status = #{status}
+            </if>
+        </trim>
+    </select>
+
+    <!--
+        3. <set>  选择性更新
+           <set> 的作用：自动补 SET 关键字、去掉末尾多余的逗号。
+           场景：只更新传了值的字段，没传的保持原值（避免把 null 覆盖回去）。
+           坑：一个字段都没传时会拼出 UPDATE ... WHERE emp_id = ?（缺 SET 列表），
+               所以调用方至少要给一个待改字段
+    -->
+    <update id="updateDynamic" parameterType="Emp">
+        UPDATE ssm_emp.employer
+        <set>
+            <if test="empName != null">emp_name = #{empName},</if>
+            <if test="dept != null">dept = #{dept},</if>
+            <if test="post != null">post = #{post},</if>
+            <if test="salary != null">salary = #{salary},</if>
+            <if test="status != null">status = #{status},</if>
+        </set>
+        WHERE emp_id = #{empId}
+    </update>
+
+    <!--
+        4. <foreach>  批量删除（拼 IN 条件）
+           属性说明：
+             collection="ids"    对应接口参数 @Param("ids")（多参数必须 @Param 显式命名）
+             item="id"           遍历中每个元素的变量名
+             open / close        前后括号
+             separator=","       元素分隔符
+           拼接结果：DELETE ... WHERE emp_id IN (?, ?, ?)
+    -->
+    <!-- 担心N+1？Actually我们使用了foreach+in，这就很好地规避了n+1-->
+    <delete id="deleteBatch">
+        DELETE FROM ssm_emp.employer WHERE emp_id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+    <!--
+        5. <foreach>  批量插入（拼多值 VALUES）
+           遍历集合，每轮生成一组 VALUES 子句，一次往返插完整批。
+           collection="list" 是 List 参数的默认名（接口上 @Param("list") 显式声明更清楚）；
+           useGeneratedKeys 只回填最后一行的主键（多值插入的固有限制，别拿它数行数）
+    -->
+    <insert id="insertBatch" useGeneratedKeys="true" keyProperty="empId">
+        INSERT INTO ssm_emp.employer (emp_name, gender, dept, post, salary, hire_date, status) VALUES
+        <foreach collection="list" item="e" separator=",">
+            (#{e.empName}, #{e.gender}, #{e.dept}, #{e.post}, #{e.salary}, #{e.hireDate}, #{e.status})
+        </foreach>
+    </insert>
+
+    <!--
+        6. <choose> / <when> / <otherwise>  互斥分支选择
+           相当于 Java 的 if - else if - else：只命中第一个成立的分支，其余全部跳过；
+           otherwise 兜底（相当于最后的 else），保证 WHERE 不落空。
+           与 <if> 的区别：if 是条件叠加（可以全中），choose 是三选一（互斥）。
+           场景：优先按姓名精确查，否则按部门查，否则查全部
+    -->
+    <select id="selectByChoice" resultMap="empMap">
+        SELECT <include refid="allColumns"/> FROM ssm_emp.employer
+        <choose>
+            <when test="empName != null and empName != ''">
+                WHERE emp_name = #{empName}
+            </when>
+            <when test="dept != null and dept != ''">
+                WHERE dept = #{dept}
+            </when>
+                <!-- 这里where 1=1，毕竟生活还得过 -->
+            <otherwise>
+                WHERE 1 = 1
+            </otherwise>
+        </choose>
+    </select>
+
+    <!--
+        ═══════════════════════════════════════════════════
+        知识点小结（课件第 4 节动态 SQL）
+        ═══════════════════════════════════════════════════
+        1. sqlsession.selectList / selectOne（包名.方法名）；接口方式：Mapper 代理
+        2. #{} 与 ${}：#{} 预编译占位（防注入，首选），${} 字符串拼接（仅限表名/排序列，须校验输入）
+        3. resultMap 与 resultType 互斥：映射的是模型类与查询结果列的关系
+        4. 动态标签：<if> <where> <set> <trim> <choose> <foreach> 组合使用；
+           where/set 本质都是 trim 的特例
+        5. 多参数必须 @Param 显式命名，否则报 BindingException: Parameter not found
+    -->
+
+</mapper>

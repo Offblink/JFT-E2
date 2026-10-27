@@ -1,0 +1,198 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.offblink.lab01.EmpJoinMapper">
+
+<!--    下面是resultMap-->
+
+    <!-- 员工全列片段（单表 / 嵌套 select 用）：dept_id 直接对应属性 deptId（驼峰映射接管），用不着别名 -->
+    <sql id="empColumns">
+        e.emp_id, e.emp_name, e.gender, e.dept, e.post, e.salary, e.hire_date, e.status, e.dept_id
+    </sql>
+
+    <!-- 员工全列片段（联查用）：与 dept 表 JOIN 时 dept_id 撞名，员工侧必须起别名 -->
+    <sql id="empColumnsAliased">
+        e.emp_id, e.emp_name, e.gender, e.dept, e.post, e.salary, e.hire_date, e.status,
+        e.dept_id AS emp_dept_id
+    </sql>
+
+    <!-- ① 员工 + 部门（多对一） -->
+    <resultMap id="empWithDeptMap" type="Emp">
+        <id property="empId" column="emp_id"/>
+
+        <result property="empName" column="emp_name"/>
+        <result property="gender" column="gender"/>
+        <result property="dept" column="dept"/>
+        <result property="post" column="post"/>
+        <result property="salary" column="salary"/>
+        <result property="hireDate" column="hire_date"/>
+        <result property="status" column="status"/>
+
+        <!-- 员工自己的外键，来自别名列 emp_dept_id（不是部门的 dept_id） -->
+        <result property="deptId" column="emp_dept_id"/>
+
+        <!-- 关联对象：property 写 Emp 里的属性名，javaType 写这个对象是什么类 -->
+        <association property="deptInfo" javaType="Dept">
+            <id property="deptId" column="dept_id"/>
+            <result property="deptName" column="dept_name"/>
+            <result property="loc" column="loc"/>
+        </association>
+
+    </resultMap>
+
+    <!-- ② 员工 + 技能（多对多） -->
+    <resultMap id="empWithSkillsMap" type="Emp">
+        <id property="empId" column="emp_id"/>
+
+        <result property="empName" column="emp_name"/>
+        <result property="gender" column="gender"/>
+        <result property="dept" column="dept"/>
+        <result property="post" column="post"/>
+        <result property="salary" column="salary"/>
+        <result property="hireDate" column="hire_date"/>
+        <result property="status" column="status"/>
+        <result property="deptId" column="dept_id"/>
+
+        <collection property="skills" ofType="Skill">
+            <id property="id" column="skill_id"/>
+            <result property="name" column="skill_name"/>
+            <result property="description" column="skill_desc"/>
+        </collection>
+
+    </resultMap>
+
+    <!-- ③ 部门 + 员工列表（一对多）：与 ① 是反向关系，这边部门是"一"、员工是"多"，
+         集合里元素的主键同样建议用 <id>（同一个员工不会在集合里出现两次） -->
+    <resultMap id="deptWithEmpsMap" type="Dept">
+        <id property="deptId" column="dept_id"/>
+
+        <result property="deptName" column="dept_name"/>
+        <result property="loc" column="loc"/>
+
+        <collection property="emps" ofType="Emp">
+            <id property="empId" column="emp_id"/>
+            <result property="empName" column="emp_name"/>
+            <result property="gender" column="gender"/>
+            <result property="dept" column="dept"/>
+            <result property="post" column="post"/>
+            <result property="salary" column="salary"/>
+            <result property="hireDate" column="hire_date"/>
+            <result property="status" column="status"/>
+            <!-- 员工侧的外键列同样要别名：dept_id 这个名字已经被部门那一层用掉了 -->
+            <result property="deptId" column="emp_dept_id"/>
+        </collection>
+    </resultMap>
+
+<!--    n+1的主要来源-->
+    <!-- ④⑤⑥ 嵌套 select 版用的映射：只有关联字段需要显式声明，普通列交给"驼峰自动映射"
+         （mapUnderscoreToCamelCase=true：emp_name → empName、dept_id → deptId 自动接管）。
+         column 写的是"结果集里的列名"，它是子查询的入参；select 必须是方法全限定名 -->
+    <resultMap id="empWithDeptNestedMap" type="Emp">
+        <id property="empId" column="emp_id"/>
+        <association property="deptInfo" javaType="Dept" column="dept_id"
+                     select="com.offblink.lab01.EmpJoinMapper.selectDeptById"/>
+    </resultMap>
+
+    <resultMap id="empWithSkillsNestedMap" type="Emp">
+        <id property="empId" column="emp_id"/>
+        <collection property="skills" ofType="Skill" column="emp_id"
+                    select="com.offblink.lab01.EmpJoinMapper.selectSkillsByEmpId"/>
+    </resultMap>
+
+    <resultMap id="deptWithEmpsNestedMap" type="Dept">
+        <id property="deptId" column="dept_id"/>
+        <collection property="emps" ofType="Emp" column="dept_id"
+                    select="com.offblink.lab01.EmpJoinMapper.selectEmpsByDeptId"/>
+    </resultMap>
+
+    <!--
+        下面是连接查询运用的select语句
+    -->
+
+    <!-- 一条 JOIN：员工 + 部门（结果被 empWithDeptMap 装成 Emp.deptInfo） -->
+    <select id="selectEmpWithDept" resultMap="empWithDeptMap">
+        SELECT <include refid="empColumnsAliased"/>,
+               d.dept_id, d.dept_name, d.loc
+        FROM ssm_emp.employer e
+        LEFT JOIN ssm_emp.dept d ON e.dept_id = d.dept_id
+        WHERE e.emp_id = #{empId}
+    </select>
+
+    <!-- 同样的映射，去掉 WHERE 查一批：一对一与多对一在映射层写法完全相同，只差"查一条还是查一批" -->
+    <select id="selectAllWithDept" resultMap="empWithDeptMap">
+        SELECT <include refid="empColumnsAliased"/>,
+               d.dept_id, d.dept_name, d.loc
+        FROM ssm_emp.employer e
+        LEFT JOIN ssm_emp.dept d ON e.dept_id = d.dept_id
+        ORDER BY e.emp_id
+    </select>
+
+    <!-- 一对多：从部门出发 LEFT JOIN 员工，一个部门摊成 N 行，靠 <id> 归并成"1 个部门 + N 个员工" -->
+    <select id="selectAllDeptWithEmps" resultMap="deptWithEmpsMap">
+        SELECT d.dept_id, d.dept_name, d.loc,
+               <include refid="empColumnsAliased"/>
+        FROM ssm_emp.dept d
+        LEFT JOIN ssm_emp.employer e ON d.dept_id = e.dept_id
+        ORDER BY d.dept_id, e.emp_id
+    </select>
+
+    <!-- 多对多：两次 LEFT JOIN 穿过中间表（employer → employer_skill → skill），一条 SQL 拿全 -->
+<!--    这就用了中间表-->
+    <select id="selectAllWithSkills" resultMap="empWithSkillsMap">
+        SELECT <include refid="empColumns"/>,
+               s.id AS skill_id, s.name AS skill_name, s.description AS skill_desc
+        FROM ssm_emp.employer e
+        LEFT JOIN ssm_emp.employer_skill es ON e.emp_id = es.emp_id
+        LEFT JOIN ssm_emp.skill s ON es.skill_id = s.id
+        ORDER BY e.emp_id, s.id
+    </select>
+
+    <!--
+        以下是嵌套select运用的select语句
+    -->
+
+    <select id="selectAllWithDeptNested" resultMap="empWithDeptNestedMap">
+        SELECT <include refid="empColumns"/>
+        FROM ssm_emp.employer e
+        ORDER BY e.emp_id
+    </select>
+
+    <select id="selectAllDeptWithEmpsNested" resultMap="deptWithEmpsNestedMap">
+        SELECT d.dept_id, d.dept_name, d.loc
+        FROM ssm_emp.dept d
+        ORDER BY d.dept_id
+    </select>
+
+    <select id="selectAllWithSkillsNested" resultMap="empWithSkillsNestedMap">
+        SELECT <include refid="empColumns"/>
+        FROM ssm_emp.employer e
+        ORDER BY e.emp_id
+    </select>
+
+<!--    子select语句-->
+
+    <select id="selectDeptById" resultType="Dept">
+        SELECT d.dept_id, d.dept_name, d.loc
+        FROM ssm_emp.dept d
+        WHERE d.dept_id = #{deptId}
+    </select>
+
+    <select id="selectEmpsByDeptId" resultType="Emp">
+        SELECT <include refid="empColumns"/>
+        FROM ssm_emp.employer e
+        WHERE e.dept_id = #{deptId}
+        ORDER BY e.emp_id
+    </select>
+
+    <!-- 查"这个员工会什么"：技能侧与中间表两次 JOIN（子查询自己也可以是多表查询） -->
+    <select id="selectSkillsByEmpId" resultType="Skill">
+        SELECT s.id, s.name, s.description
+        FROM ssm_emp.skill s
+        INNER JOIN ssm_emp.employer_skill es ON s.id = es.skill_id
+        WHERE es.emp_id = #{empId}
+        ORDER BY s.id
+    </select>
+
+</mapper>

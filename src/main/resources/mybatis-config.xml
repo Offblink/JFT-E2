@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE configuration
+        PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-config.dtd">
+
+<configuration>
+
+    <!-- 引入数据库连接配置：连接四要素外置在 db.properties -->
+    <properties resource="db.properties"/>
+
+    <!-- 全局设置 -->
+    <settings>
+        <!-- 开启日志：SQL 日志走 SLF4J 门面，实际由 Logback 输出
+             （课件用的 LOG4J，本项目按要求换 Logback：Log4j 1.x 已 EOL） -->
+        <setting name="logImpl" value="SLF4J"/>
+
+        <!-- 开启驼峰命名自动映射：emp_name -> empName -->
+<!--        这个知识点阶测还考了呢-->
+        <setting name="mapUnderscoreToCamelCase" value="true"/>
+
+    </settings>
+
+    <!-- 实体类别名：映射文件里 type 直接写 Emp 即可 -->
+    <typeAliases>
+        <package name="com.offblink.entity"/>
+    </typeAliases>
+
+    <!-- 环境配置 -->
+    <environments default="development">
+        <environment id="development">
+            <!-- 事务管理器 -->
+            <transactionManager type="JDBC"/>
+            <!-- 数据源（POOLED 连接池） -->
+            <dataSource type="POOLED">
+                <property name="driver" value="${jdbc.driver}"/>
+                <property name="url" value="${jdbc.url}"/>
+                <property name="username" value="${jdbc.username}"/>
+                <property name="password" value="${jdbc.password}"/>
+            </dataSource>
+        </environment>
+    </environments>
+
+    <!--
+        注册 Mapper（课件「方式2」：一条扫包，接口 + XML 一起注册）。
+        成立的前提：XML 必须放在与接口同包同名的 resources/com/offblink/lab01/EmpMapper.xml——
+        扫包时 MyBatis 按「接口全限定名 → 类路径同名资源」去找 XML，找不到就当纯注解接口处理；
+        XML 挪到别处编译期不报错，运行期才报 Invalid bound statement (not found)。
+    -->
+    <mappers>
+        <package name="com.offblink.lab01"/>
+    </mappers>
+
+</configuration>

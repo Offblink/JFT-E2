@@ -1,0 +1,251 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.offblink</groupId>
+    <artifactId>JFT-E2</artifactId>
+    <version>1.0-SNAPSHOT</version>
+    <name>JFT-E2</name>
+
+    <packaging>war</packaging>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+        <!-- 与实验一保持同一语法目标：本机 JDK 17 编译、产出 Java 8 字节码 -->
+        <maven.compiler.source>1.8</maven.compiler.source>
+        <maven.compiler.target>1.8</maven.compiler.target>
+        <!-- 版本集中在 properties：一处改动，全工程生效 -->
+        <spring.version>5.3.31</spring.version>
+        <jackson.version>2.15.3</jackson.version>
+        <mybatis-plus.version>3.5.3.1</mybatis-plus.version>
+        <tomcat.version>9.0.83</tomcat.version>
+        <!-- 服务端口：本机 8080 / 8081 被 xerj（本地检索节点）占用，故用 8082 -->
+        <tomcat.port>8082</tomcat.port>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- BOM 收敛 Spring 全家桶版本（spring-webmvc / spring-context / spring-jdbc 不再各写一处版本） -->
+            <dependency>
+                <groupId>org.springframework</groupId>
+                <artifactId>spring-framework-bom</artifactId>
+                <version>${spring.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <!-- 同理收敛 Jackson（databind / core / annotations 三者版本必须一致） -->
+            <dependency>
+                <groupId>com.fasterxml.jackson</groupId>
+                <artifactId>jackson-bom</artifactId>
+                <version>${jackson.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+        <!-- ============ Web 层：SpringMVC ============ -->
+        <!-- spring-webmvc：DispatcherServlet / @RestController / @ResponseBody / HandlerInterceptor 全家桶；
+             传递 spring-web / spring-context / spring-aop / spring-beans / spring-core -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-webmvc</artifactId>
+        </dependency>
+
+        <!-- spring-context：IoC 容器本体（@Configuration / @ComponentScan / @Bean） -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-context</artifactId>
+        </dependency>
+
+        <!-- spring-jdbc：DataSourceTransactionManager（@Transactional 的执行者） -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-jdbc</artifactId>
+        </dependency>
+
+        <!-- @AspectJ 切面的织入引擎：Spring AOP 只做代理，切点表达式的解析与匹配靠 AspectJ -->
+        <dependency>
+            <groupId>org.aspectj</groupId>
+            <artifactId>aspectjweaver</artifactId>
+            <version>1.9.7</version>
+        </dependency>
+
+        <!-- Servlet API：由 Tomcat 提供，编译期可见、打包不进 WEB-INF/lib -->
+        <dependency>
+            <groupId>javax.servlet</groupId>
+            <artifactId>javax.servlet-api</artifactId>
+            <version>4.0.1</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- 内嵌 Tomcat 9：仅本地开发用（EmbeddedTomcatLauncher），provided 不进 war；
+             部署到独立 Tomcat 9 时用的是容器自带的同类 -->
+        <dependency>
+            <groupId>org.apache.tomcat.embed</groupId>
+            <artifactId>tomcat-embed-core</artifactId>
+            <version>${tomcat.version}</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- 容器默认 web.xml 里注册了 jsp servlet（load-on-startup），没有 Jasper 时
+             启动会打一条 ClassNotFoundException 噪声。本项目的页面是静态 HTML，
+             补上它只为让容器按标准配置完整启动；provided，不进 war -->
+        <dependency>
+            <groupId>org.apache.tomcat.embed</groupId>
+            <artifactId>tomcat-embed-jasper</artifactId>
+            <version>${tomcat.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <!-- ============ 持久层：MyBatis-Plus ============ -->
+        <dependency>
+            <groupId>com.baomidou</groupId>
+            <artifactId>mybatis-plus</artifactId>
+            <version>${mybatis-plus.version}</version>
+        </dependency>
+
+        <!-- mybatis-spring：SqlSessionFactoryBean / @MapperScan / Spring 托管事务连接。
+             排除传递的 mybatis——以 MP 内置的 MyBatis 版本为准，避免双版本打架 -->
+        <dependency>
+            <groupId>org.mybatis</groupId>
+            <artifactId>mybatis-spring</artifactId>
+            <version>2.1.2</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.mybatis</groupId>
+                    <artifactId>mybatis</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <!-- 连接池：Spring 默认搭档 HikariCP（4.0.3 是 Java 8 的上限，5.x 起要 JDK 11） -->
+        <dependency>
+            <groupId>com.zaxxer</groupId>
+            <artifactId>HikariCP</artifactId>
+            <version>4.0.3</version>
+        </dependency>
+
+        <!-- MySQL 驱动 -->
+        <dependency>
+            <groupId>com.mysql</groupId>
+            <artifactId>mysql-connector-j</artifactId>
+            <version>8.0.33</version>
+        </dependency>
+
+        <!-- @PostConstruct / @PreDestroy / @Resource：JDK 11 起被移出 JDK，编译要显式带上 -->
+        <dependency>
+            <groupId>javax.annotation</groupId>
+            <artifactId>javax.annotation-api</artifactId>
+            <version>1.3.2</version>
+        </dependency>
+
+        <!-- ============ 序列化与校验 ============ -->
+        <!-- Jackson：@RequestBody / @ResponseBody 的 JSON 编解码；版本由 jackson-bom 统一 -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+
+        <!-- JSR-303 校验实现：@Valid + @NotBlank 等在 Controller 参数上生效。
+             必须停在 6.2.x：7.x 起换到 jakarta.validation 命名空间（Jakarta EE 9），
+             与 Tomcat 9 / javax.servlet 4.0 这套 javax 技术栈不是一回事，编译期会找不到符号 -->
+        <dependency>
+            <groupId>org.hibernate.validator</groupId>
+            <artifactId>hibernate-validator</artifactId>
+            <version>6.2.5.Final</version>
+        </dependency>
+
+        <!-- ============ 日志 ============ -->
+        <!-- SLF4J 门面 + Logback 实现。显式锁 1.7.36：HikariCP 4.0.3 传递的是 slf4j-api 2.0.0-alpha1，
+             2.x 换了绑定发现机制，logback 1.2.x 的绑定装不上 → 日志退化成 NOPLogger -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>1.7.36</version>
+        </dependency>
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <version>1.2.13</version>
+        </dependency>
+
+        <!-- Lombok：实体/返回体的样板代码（getter/setter/toString）交给注解 -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>1.18.40</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- ============ 测试 ============ -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>5.10.2</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- EL 实现：Hibernate Validator 6.x 的消息插值器要 javax.el.ExpressionFactory，
+             缺了直接 HV000183 / NoClassDefFoundError: javax/el/ELManager（实测踩过）。
+             真实 Tomcat 自带（tomcat-embed-el 就是同一份），故 provided：不进 war，
+             但本地 exec:exec 运行时必须可见 -->
+        <dependency>
+            <groupId>org.apache.tomcat.embed</groupId>
+            <artifactId>tomcat-embed-el</artifactId>
+            <version>${tomcat.version}</version>
+            <scope>provided</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <finalName>JFT-E2</finalName>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-war-plugin</artifactId>
+                <version>3.3.2</version>
+                <configuration>
+                    <!-- 用 ServletContainerInitializer 取代 web.xml，不存在该文件也不报错 -->
+                    <failOnMissingWebXml>false</failOnMissingWebXml>
+                </configuration>
+            </plugin>
+
+            <!-- surefire 必须显式锁 3.x：老版本只认 JUnit4 的运行器，跑 JUnit5 会"0 个用例"假绿 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.2.5</version>
+            </plugin>
+
+            <!-- 免安装运行：mvn exec:exec
+                 跑的确实是 Tomcat 9（embed-core 9.0.83），由工程内 EmbeddedTomcatLauncher 拉起。
+                 不用 tomcat7-maven-plugin：它 2013 年编译，调用了 Tomcat 8 起已删除的
+                 Tomcat.setDefaultRealm(Realm)，把 embed-core 顶到 9.x 必炸 NoSuchMethodError
+                 （实测证），而它自带的是 Tomcat 7（Servlet 3.0，低于 Spring 5.3 要求的 3.1）。
+
+                 为什么用 exec:exec（fork 新 JVM）而不是 exec:java（Maven 进程内执行）：
+                 进程内执行时 webapp 类加载器的默认父加载器是 Maven 自己的加载器，
+                 Servlet 3.0 的 SCI 扫描会 ClassNotFoundException: javax.servlet.ServletContainerInitializer，
+                 DispatcherServlet 注册不上、接口全 404。独立 JVM 的系统类路径就是本工程依赖，行为与真实部署一致。 -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.1.0</version>
+                <configuration>
+                    <executable>java</executable>
+                    <classpathScope>compile</classpathScope>
+                    <arguments>
+                        <argument>-Dserver.port=${tomcat.port}</argument>
+                        <argument>-classpath</argument>
+                        <classpath/>
+                        <argument>com.offblink.launcher.EmbeddedTomcatLauncher</argument>
+                    </arguments>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
